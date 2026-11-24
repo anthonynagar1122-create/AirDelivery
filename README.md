@@ -15,6 +15,8 @@ Phase 1 (foundation) is in progress. Built so far:
 - Browser speech input where supported, typed input everywhere
 - Supabase schema for customers, addresses, orders, items and an order audit log
 
+Confirmed product and design decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
+
 Not built yet: live Aira voice (OpenAI Realtime over WebRTC), real product
 search, vendor integrations, the agent command centre, and payments.
 
