@@ -26,7 +26,7 @@ Avoid: cream and terracotta palettes, dark-with-neon accents, identical card gri
 | Layer | Choice |
 | --- | --- |
 | Frontend | Next.js 16, TypeScript, Tailwind CSS 4 |
-| Voice | **OpenAI Realtime API over WebRTC**. Browser gets a short-lived session token from our backend; the API key never reaches the browser |
+| Voice | **Sarvam Voice Agents (Samvaad) over WebRTC**. Web SDK runs real-time voice sessions in the browser with microphone capture; backend proxy holds the API key (never exposed to client) |
 | Database | Supabase Postgres. Built against local migrations first; a hosted project is connected later |
 | Payments | Pay on delivery (cash or UPI), plus a UPI payment link after delivery |
 
