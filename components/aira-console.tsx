@@ -1,8 +1,10 @@
 "use client";
 
-import { FormEvent, useId, useState } from "react";
+import { FormEvent, useId, useRef, useState, useEffect } from "react";
 import { GUARDRAIL_REPLY, routeUtterance } from "@/lib/aira/intent";
 import { getSpeechRecognition, type SpeechRecognitionLike } from "@/lib/aira/speech";
+import { SarvamVoiceAgent } from "@/lib/aira/sarvam";
+import { AgentState } from "sarvam-conv-ai-sdk/browser";
 
 type Turn = { id: number; speaker: "you" | "aira"; text: string };
 
@@ -14,14 +16,28 @@ const OPENING: Turn = {
   text: "Hi, I am Aira. What do you want to order today?",
 };
 
+const SARVAM_APP_ID = process.env.NEXT_PUBLIC_SARVAM_APP_ID || "Conversatio-090534dd-d6d8";
+
 export function AiraConsole() {
   const inputId = useId();
+  const sarvamAgentRef = useRef<SarvamVoiceAgent | null>(null);
   const [turns, setTurns] = useState<Turn[]>([OPENING]);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [input, setInput] = useState("");
   const [listening, setListening] = useState(false);
   const [voiceAvailable] = useState(() => getSpeechRecognition() !== null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [sarvamConnected, setSarvamConnected] = useState(false);
+  const [agentState, setAgentState] = useState<AgentState | null>(null);
+
+  useEffect(() => {
+    return () => {
+      // Cleanup on unmount
+      if (sarvamAgentRef.current) {
+        sarvamAgentRef.current.stop().catch(console.error);
+      }
+    };
+  }, []);
 
   function push(speaker: Turn["speaker"], text: string) {
     setTurns((prev) => [...prev, { id: prev.length, speaker, text }]);
@@ -69,31 +85,81 @@ export function AiraConsole() {
     submitUtterance(utterance);
   }
 
-  function listen() {
-    const Recognition = getSpeechRecognition();
-    if (!Recognition) {
-      setNotice("Voice is not supported in this browser. Type your request instead.");
-      return;
-    }
-
+  async function listen() {
     setNotice(null);
-    const recognition: SpeechRecognitionLike = new Recognition();
-    recognition.lang = "en-IN";
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onresult = (event) => {
-      const transcript = event.results[0]?.[0]?.transcript ?? "";
-      submitUtterance(transcript);
-    };
-    recognition.onerror = () => {
-      setListening(false);
-      setNotice("I could not hear that. Check microphone permission, or type instead.");
-    };
-    recognition.onend = () => setListening(false);
-
     setListening(true);
-    recognition.start();
+
+    try {
+      // Use Sarvam Voice Agent for live voice sessions
+      if (SARVAM_APP_ID) {
+        const userId = `user-${Date.now()}`;
+        const agent = new SarvamVoiceAgent({
+          appId: SARVAM_APP_ID,
+          userId,
+        });
+
+        sarvamAgentRef.current = agent;
+
+        await agent.start({
+          onTranscript: (msg) => {
+            if (msg.role === "user") {
+              push("you", msg.content);
+            } else {
+              push("aira", msg.content);
+            }
+          },
+          onStateChange: (state) => {
+            setAgentState(state);
+            setSarvamConnected(state !== AgentState.ERROR && agent.isConnected());
+          },
+          onError: (error) => {
+            setListening(false);
+            setNotice(`Voice error: ${error.message}. Try typing instead.`);
+            console.error("Sarvam error:", error);
+          },
+        });
+
+        return;
+      }
+
+      // Fallback to browser Web Speech API
+      const Recognition = getSpeechRecognition();
+      if (!Recognition) {
+        setNotice("Voice is not supported in this browser. Type your request instead.");
+        setListening(false);
+        return;
+      }
+
+      const recognition: SpeechRecognitionLike = new Recognition();
+      recognition.lang = "en-IN";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0]?.[0]?.transcript ?? "";
+        submitUtterance(transcript);
+      };
+      recognition.onerror = () => {
+        setListening(false);
+        setNotice("I could not hear that. Check microphone permission, or type instead.");
+      };
+      recognition.onend = () => setListening(false);
+
+      recognition.start();
+    } catch (error) {
+      setListening(false);
+      setNotice(`Error starting voice: ${error instanceof Error ? error.message : "Unknown error"}. Type instead.`);
+      console.error("Voice start error:", error);
+    }
+  }
+
+  async function stopListening() {
+    setListening(false);
+    if (sarvamAgentRef.current) {
+      await sarvamAgentRef.current.stop();
+      sarvamAgentRef.current = null;
+      setSarvamConnected(false);
+    }
   }
 
   function confirm() {
@@ -169,17 +235,23 @@ export function AiraConsole() {
           onChange={(e) => setInput(e.target.value)}
           placeholder="Or type it: paracetamol and milk"
           autoComplete="off"
-          className="min-h-12 min-w-0 flex-1 rounded-[var(--radius-control)] border border-line bg-white px-4 text-base placeholder:text-muted focus-visible:border-ink"
+          disabled={listening && sarvamConnected}
+          className="min-h-12 min-w-0 flex-1 rounded-[var(--radius-control)] border border-line bg-white px-4 text-base placeholder:text-muted focus-visible:border-ink disabled:opacity-60"
         />
-        {voiceAvailable && (
+        {(voiceAvailable || SARVAM_APP_ID) && (
           <button
             type="button"
-            onClick={listen}
-            disabled={listening}
-            aria-pressed={listening}
+            onClick={sarvamConnected && listening ? stopListening : listen}
+            disabled={false}
+            aria-pressed={listening && sarvamConnected}
             className="relative min-h-12 shrink-0 rounded-[var(--radius-control)] border border-ink px-4 font-semibold text-ink transition-colors hover:bg-chalk-deep disabled:opacity-60"
           >
-            {listening ? (
+            {listening && sarvamConnected ? (
+              <>
+                <span aria-hidden className="aira-ring absolute inset-0 rounded-[var(--radius-control)] border-2 border-marigold" />
+                Stop
+              </>
+            ) : listening ? (
               <>
                 <span aria-hidden className="aira-ring absolute inset-0 rounded-[var(--radius-control)] border-2 border-marigold" />
                 Listening
@@ -191,7 +263,8 @@ export function AiraConsole() {
         )}
         <button
           type="submit"
-          className="min-h-12 shrink-0 rounded-[var(--radius-control)] bg-ink px-5 font-semibold text-chalk transition-colors hover:bg-ink-soft"
+          disabled={listening && sarvamConnected}
+          className="min-h-12 shrink-0 rounded-[var(--radius-control)] bg-ink px-5 font-semibold text-chalk transition-colors hover:bg-ink-soft disabled:opacity-60"
         >
           Send
         </button>
