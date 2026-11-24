@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+/*
+  AirDelivery design tokens.
+  Chalk paper, ink navy, marigold voice. No cream, no gradients, no glass.
+*/
+@theme {
+  --color-chalk: #f3f5f2;
+  --color-chalk-deep: #e6eae5;
+  --color-ink: #0f1b2d;
+  --color-ink-soft: #3b4a60;
+  --color-muted: #5d6a7d;
+  --color-line: #cfd6cf;
+  --color-marigold: #e8a317;
+  --color-marigold-ink: #6b4400;
+  --color-signal: #0e7c6b;
+  --color-danger: #a4362b;
+
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-panel: 1.25rem;
+  --radius-control: 0.75rem;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-chalk text-ink font-body antialiased;
+    line-height: 1.55;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-marigold);
+    outline-offset: 3px;
+  }
+}
+
+/* One orchestrated moment: the listening ring. Respects reduced motion. */
+@keyframes aira-listen {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+
+@keyframes aira-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.aira-ring {
+  animation: aira-listen 1.8s ease-out infinite;
+}
+
+.aira-caret {
+  animation: aira-caret 1s steps(1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aira-ring,
+  .aira-caret {
+    animation: none;
+  }
+}
